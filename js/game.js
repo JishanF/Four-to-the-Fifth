@@ -8,6 +8,9 @@ var Q = Quintus({ development: true, audioSupported: [ 'wav' ] })
 // GAME SETTINGS
 var MUSIC_ENABLED = true;
 
+// ABILITY SETTINGS
+var HOMING_ROCKETS = true;
+
 // Increment this if you add a new map in pattern 
 // ie: (level1.tmx, level2.tmx, ..., levelN.tmx). 
 var NUM_MAPS = 2
@@ -22,6 +25,7 @@ var tracks = [ "disp_heroes.wav", "test.wav", "metal.wav" ];
 // Global next track control
 var play_next_track = function() {
     console.log("Playing next track");
+    Q.state.set("track_playing", true);
     if(MUSIC_ENABLED){
       Q.audio.stop();
       Q.state.inc("track_id", 1);
@@ -101,6 +105,8 @@ Q.loadTMX([
          "cave.png",
          "explosion.png",
          "enemy.png",
+         "robot_dual.png",
+         "robot_gatling.png",
          "rocket.png",
          "shot_pellet.png",
          "soldier_base.png",
@@ -141,10 +147,11 @@ Q.loadTMX([
       Q.loadTMX("level" + i + ".tmx");
     }
     
+    var ld = document.getElementById("loading");
     var ls = document.getElementById("loading_status");
     ls.innerHTML = "Now Loading... " + Math.floor(loaded / total * 100) + "%";
     if(loaded == total){
-      ls.remove(); 
+      ld.remove(); 
     }
   }
 });

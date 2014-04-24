@@ -5,11 +5,13 @@ Q.Sprite.extend("Human", {
     this._super(p, {
       asset: p.base_sprite,
       bullets: 0,
+      stuck: 0,
+      stuckCheck: false,
       collisionMask: Q.SPRITE_ACTIVE | Q.SPRITE_ENEMY | Q.SPRITE_DEFAULT | Q.SPRITE_PLAYER,
       fire_block: false,
       fire_delay: 100,
       hp: 100,
-      shotDelay: 50,
+      shotDelay: 10,
       meleeDelay: 100,
       sprinting: false,
       stepDistance: 10,
@@ -23,12 +25,12 @@ Q.Sprite.extend("Human", {
     this.add('2d');
     this.on("hit", function(collision){
       if(collision.obj.isA("Bullet") || collision.obj.isA("ShotPellet") || collision.obj.isA("Explosion")){
-      	this.p.hp -= 7;
+        this.p.hp -= 7;
 
-      	if(this.isA("Player")){
+        if(this.isA("Player")){
           Q.stageScene("ui", 1, this.p);
-      	  Q.state.dec("player_health", 7);
-      	}
+          Q.state.dec("player_health", 7);
+        }
 
         if(this.p.hp <= 0){
           this.destroy();
@@ -52,7 +54,16 @@ Q.Sprite.extend("Human", {
       }
 
       else if(collision.obj.isA("Sword")){
-    	  this.destroy();
+        this.destroy();
+      }
+
+      else{ //collision with a wall
+        if(!collision.obj.isA("Enemy") && !this.p.stuckCheck){ //colliding with wall
+            this.p.stuck += 6;
+          }
+        if(this.p.stuck >= 24){ //game assumes stuck
+          this.p.stuckCheck = true;
+        }
       }
     });
   },
@@ -78,8 +89,8 @@ Q.Sprite.extend("Human", {
   },
   
   equip_assaultrifle: function() {
-  	this.unequip_guns();
-  	this.add("assaultrifle");
+    this.unequip_guns();
+    this.add("assaultrifle");
   },
 
   // Event to put away weapons and return to base sprite.
@@ -135,17 +146,17 @@ Q.Human.extend("Player", {
     this.on("step", this, "step_player");
 
     Q.input.on("fire", this, function(){ this.fire()
-    	
+      
     });
     Q.input.on("wep1", this, "put_away_wep");
     Q.input.on("wep2", this, "equip_gun");
     Q.input.on("wep3", this, "equip_shotgun");
-    Q.input.on("wep4", this, "equip_assaultrifle");
-    Q.input.on("wep5", this, "equip_machinegun");
-    Q.input.on("wep6", this, "equip_rocketlauncher");
+    Q.input.on("wep4", this, "equip_machinegun");
+    Q.input.on("wep5", this, "equip_rocketlauncher");
+    Q.input.on("wep6", this, "equip_assaultrifle");
     Q.input.on("sword", this, "swing_sword");
     Q.input.on("pause", this, function(){
-    	Q.state.inc("pause", this, !Q.state.get("pause"));
+      Q.state.inc("pause", this, !Q.state.get("pause"));
     });
   },
 
@@ -201,47 +212,6 @@ Q.Human.extend("Player", {
   }
 });
 
-Q.Human.extend("Zombie", {
-  init: function(p) {
-    this._super(p, {
-       collisionMask: Q.SPRITE_ACTIVE | Q.SPRITE_PLAYER | Q.SPRITE_ENEMY | Q.SPRITE_DEFAULT | Q.SPRITE_ZOMBIE,
-       type: Q.SPRITE_ZOMBIE
-       });
-    
-    this.on("chase_player");
-    this.on("face_player");
-    this.on("frenzy");
-    this.on("maul_player");
-    this.on("step", this, "step_enemy");
-    },
-    
-    chase_player: function(player){
-     this.face_player(player);
-     },
-     
-    face_player: function(player){
-       this.p.angle = -1 * TO_DEG * Math.atan2( (player.p.x - this.p.x), (player.p.y - this.p.y) );
-    },
-    
-    frenzy: function(player){
-      this.p.speed *= 1.5;
-    },
-    
-    step_enemy: function(){
-     // Nothing at the moment
-     },
-     
-     maul_player: function(collision){
-      if(collision.obj.isA("Player")){
-       collision.obj.p.hp -=7;
-       collision.obj.p.x -= 15 * Math.cos(TO_RAD * (this.p.angle+90));
-       collision.obj.p.y -= 15 * Math.sin(TO_RAD * (this.p.angle+90));
-       this.p.speed *= 0.9;
-       }
-    },
-     
-});
-
 
 Q.Human.extend("Enemy", {
   init: function(p) {
@@ -267,15 +237,29 @@ Q.Human.extend("Enemy", {
     if(Math.abs(this.p.x - player.p.x) < 300 && Math.abs(this.p.y - player.p.y) < 300){
       if(this.p.shotDelay-- <= 1){
         this.fire();
-        this.p.shotDelay += 50;
+        this.p.shotDelay += 25;
       }
-    } else if(Math.abs(this.p.x - player.p.x) > 450 && Math.abs(this.p.y - player.p.y) > 450){
-    	
+    } 
+    
+    else if(Math.abs(this.p.x - player.p.x) > 450 && Math.abs(this.p.y - player.p.y) > 450){
+      //sight range ends here
     }    
+
     else {
-      // Chase player if out of range.
-      this.p.x += this.p.speed * Math.cos(TO_RAD * (this.p.angle+90));
-      this.p.y += this.p.speed * Math.sin(TO_RAD * (this.p.angle+90));
+      if(this.p.stuckCheck){ //stuck so move back 4 times
+        this.p.stuck -= 6;
+        this.p.x -= this.p.speed * Math.cos(TO_RAD * (this.p.angle+90));
+        this.p.y -= this.p.speed * Math.sin(TO_RAD * (this.p.angle+90));
+
+        if(this.p.stuck <= 0){
+          this.p.stuckCheck = false; //reset check after stuck is 0
+        }
+      }
+      else{
+        // Chase player if out of range.
+        this.p.x += this.p.speed * Math.cos(TO_RAD * (this.p.angle+90));
+        this.p.y += this.p.speed * Math.sin(TO_RAD * (this.p.angle+90));
+      }
     }
   },
 
@@ -291,6 +275,34 @@ Q.Human.extend("Enemy", {
     // Nothing at the moment
   },
 
+});
+
+
+Q.Enemy.extend("Zombie", {
+  init: function(p) {
+    this._super(p, {
+      collisionMask: Q.SPRITE_ACTIVE | Q.SPRITE_PLAYER | Q.SPRITE_ENEMY | Q.SPRITE_DEFAULT | Q.SPRITE_ZOMBIE,
+      type: Q.SPRITE_ZOMBIE
+    });
+
+    this.on("chase_player");
+    this.on("maul_player");
+  },
+
+  chase_player: function(player){
+    this.face_player(player);
+    this.p.x += this.p.speed * Math.cos(TO_RAD * (this.p.angle+90));
+    this.p.y += this.p.speed * Math.sin(TO_RAD * (this.p.angle+90));
+  },
+
+  maul_player: function(collision){
+    if(collision.obj.isA("Player")){
+      collision.obj.p.hp -=7;
+      collision.obj.p.x -= 15 * Math.cos(TO_RAD * (this.p.angle+90));
+      collision.obj.p.y -= 15 * Math.sin(TO_RAD * (this.p.angle+90));
+      this.p.speed *= 0.9;
+    }
+  },
 });
 
 
@@ -355,6 +367,7 @@ Q.Sprite.extend("Rocket", {
     this._super(p, {
       asset: "rocket.png",
       atk_type: "projectile",
+      collided: false,
       collisionMask: Q.SPRITE_ENEMY | Q.SPRITE_ACTIVE,
       type: Q.SPRITE_POWERUP,
     });
@@ -362,17 +375,27 @@ Q.Sprite.extend("Rocket", {
     this.add('2d');
 
     this.on("hit", function(collision){
-      Q.audio.play("rocket_explode.wav");
-      Q.stage().insert(new Q.Explosion(
-        { 
-          x: collision.obj.p.x,
-          y: collision.obj.p.y, 
-        }
-      ));
-
+      if(!this.collided){
+        Q.audio.play("rocket_explode.wav");
+        Q.stage().insert(new Q.Explosion(
+          {   
+            x: collision.obj.p.x,
+            y: collision.obj.p.y, 
+          }
+        ));
+        this.collided = true;
+      }
       this.destroy();
     });
-  }
+  },
+
+  step: function(dt) {
+    if(HOMING_ROCKETS){
+      this.p.angle = Q("Player").first().p.angle;
+      this.p.vx = 500 * Math.cos(TO_RAD * (this.p.angle+90));
+      this.p.vy = 500 * Math.sin(TO_RAD * (this.p.angle+90));
+    }
+  },
 });
 
   
@@ -416,3 +439,14 @@ Q.Sprite.extend("Sword", {
     this.add('2d');
   }
 });
+
+Q.Sprite.extend("PowerUp", {
+  init: function(p) {
+    this._super(p, {
+      asset: p.base_sprite,
+      bullets: 0,
+      collisionMask: Q.SPRITE_ACTIVE | Q.SPRITE_ENEMY | Q.SPRITE_DEFAULT | Q.SPRITE_PLAYER,
+    });
+  }
+});
+
